@@ -1,5 +1,7 @@
 package com.example.demo.config;
 
+import com.fasterxml.jackson.databind.jsontype.BasicPolymorphicTypeValidator;
+import com.fasterxml.jackson.databind.jsontype.PolymorphicTypeValidator;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.cache.Cache;
 import org.springframework.cache.annotation.CachingConfigurerSupport;
@@ -12,6 +14,10 @@ import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.serializer.GenericJackson2JsonRedisSerializer;
 import org.springframework.data.redis.serializer.StringRedisSerializer;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+
 @Configuration
 @EnableCaching
 @Slf4j
@@ -19,12 +25,37 @@ public class RedisConfig extends CachingConfigurerSupport {
 
     @Bean
     public RedisTemplate<String, Object> redisTemplate(RedisConnectionFactory connectionFactory) {
+        ObjectMapper objectMapper = new ObjectMapper();
+
+        objectMapper.registerModule(new JavaTimeModule());
+        objectMapper.disable(
+                SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
+//        {
+//            "year":2026,
+//                "monthValue":6,
+//                "dayOfMonth":6,
+//                "hour":17,
+//        }
+        objectMapper.activateDefaultTyping(
+                BasicPolymorphicTypeValidator.builder()
+                        .allowIfSubType("com.example.demo")
+                        .build(),
+                ObjectMapper.DefaultTyping.NON_FINAL
+        );
+
+        RedisTemplate<String, Object> template = getStringObjectRedisTemplate(connectionFactory, objectMapper);
+        return template;
+    }
+
+    private static RedisTemplate<String, Object> getStringObjectRedisTemplate(RedisConnectionFactory connectionFactory, ObjectMapper objectMapper) {
+        GenericJackson2JsonRedisSerializer serializer = new GenericJackson2JsonRedisSerializer(objectMapper);
+
         RedisTemplate<String, Object> template = new RedisTemplate<>();
         template.setConnectionFactory(connectionFactory);
         template.setKeySerializer(new StringRedisSerializer());
-        template.setValueSerializer(new GenericJackson2JsonRedisSerializer());
+        template.setValueSerializer(serializer);
         template.setHashKeySerializer(new StringRedisSerializer());
-        template.setHashValueSerializer(new GenericJackson2JsonRedisSerializer());
+        template.setHashValueSerializer(serializer);
         template.afterPropertiesSet();
         return template;
     }
