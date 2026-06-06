@@ -33,31 +33,70 @@ Have you got what it takes to become a professional software engineer? Cool I'll
 
 # Construction HRMS Backend
 
-## Supabase Connection Setup (LF-205)
+## Forked Repository Choice
+We forked the **SpringBoot Employee Management System** (https://github.com/amigoscode/spring-boot-fullstack-professional) because of its lightweight, modular architecture and clean JPA starter configuration.
 
-When running the application in a Staging or Production environment connected to Supabase, you must use the **connection pooler** URL instead of the direct database connection.
+## AI Tools Used
+We used **Antigravity** (Google DeepMind's agentic coding assistant) for:
+- Codebase structure exploration and architecture planning.
+- Structuring JPA entities, validation annotations, and partial database unique constraints.
+- Implementing transaction-safe event publishers and post-commit listeners.
+- Configuring Lettuce connection timeouts, Redis template serializers, and robust cache fallback error handlers.
+- Structuring atomic git commits for clean history.
 
-### Connection Parameters
-- **Direct Connection Port**: `5432` (Avoid in high concurrency environments. Supabase has a low direct connection limit on free tier, which results in `SQLTransientConnectionException: Connection is not available` or socket drops).
-- **Connection Pooler Port**: `6543` (Uses **PgBouncer** in transaction mode. Highly recommended for Spring Boot and HikariCP).
-- **Datasource URL Format**: `jdbc:postgresql://<project-ref>.pooler.supabase.com:6543/postgres?user=<user>&password=<pass>`
+## Design Decisions & Tradeoffs
 
-### HikariCP Connection Pool Configurations
-To prevent Supabase from silently dropping idle connections and to avoid connection pool exhaustion under moderate traffic, the following pooling rules are implemented in `application-staging.yml`:
+### 1. Database-Level Constraints vs. Java Logic
+- **Tradeoff**: Traditional validation checks in Java are susceptible to race conditions.
+- **Decision**: We implemented a partial unique index `CREATE UNIQUE INDEX idx_active_clock_in ON attendance_logs (worker_id) WHERE clock_out IS NULL;` in PostgreSQL. This ensures at the database engine level that no worker can have multiple concurrent active clock-ins, ensuring absolute data integrity under high traffic.
 
-- `spring.datasource.hikari.maximum-pool-size=20`: Right-sized to handle up to 20+ concurrent users without latency freezes.
-- `spring.datasource.hikari.max-lifetime=300000`: Sets connection max lifetime to 5 minutes (300 seconds), which is shorter than Supabase's firewall idle timeout, ensuring dead connections are retired and replaced automatically.
-- `spring.datasource.hikari.keepalive-time=30000`: Configures Hikari to send a keepalive query every 30 seconds to keep connections warm and active.
-- `spring.datasource.hikari.connection-timeout=30000`: Allows up to 30 seconds to acquire a connection before throwing a timeout exception.
+### 2. Caching Strategy and Robustness
+- **Decision**: Active workers are cached under individual keys `active_worker:{workerId}` with a 16-hour TTL.
+- **Degradation**: If Redis goes offline, a custom `CacheErrorHandler` intercepts Lettuce connection failures, logs a warning, and falls back to fetching active workers directly from the database (`clock_out IS NULL`), keeping the site running without downtime.
+- **Profile Segregation**: Added environment-specific configs (`application.yml` and `application-staging.yml`) to tune HikariCP limits, keepalive queries (every 30s), and connection lifetimes (5 mins) specifically tailored to survive Supabase's idle connection drops.
 
-## Run Configuration
-- **Local Dev Profile**: Starts with default Hikari connection pool configuration.
+### 3. If We Had More Time...
+- **Historical Wages**: A worker's daily wage rate is currently read directly from their profile. If a worker's wage changes, historical overtime entry amounts won't reflect the rate at the time of the shift. We would introduce a `worker_wage_rates` history table.
+- **Message Broker**: Currently, SMS dispatches use Spring's internal `ApplicationEventPublisher`. For production, we'd replace this with a broker (RabbitMQ/Kafka) to support persistent queues, retries, and rate limiting.
+- **Database Migrations**: We would use **Flyway** or **Liquibase** instead of Hibernate's `ddl-auto: update` to strictly version database schemas across local, staging, and production.
+
+---
+
+## Local Setup & Run Instructions
+
+### Prerequisites
+- **Java 17** or higher
+- **Local Redis** (Default port `6379`. If Redis is offline, caching is skipped and database fallback kicks in automatically).
+- **Supabase Account** (For database hosting).
+
+### Supabase Connection Setup
+1. Create a project at [supabase.com](https://supabase.com).
+2. Go to **Project Settings** -> **Database**.
+3. Under **Connection Pooler**, copy the **Transaction Mode** connection string (ensure the port is `6543` and pgBouncer is enabled).
+4. Update the connection string in `src/main/resources/application.yml` or `src/main/resources/application-staging.yml`:
+   ```yaml
+   spring:
+     datasource:
+       url: jdbc:postgresql://<project-ref>.pooler.supabase.com:6543/postgres?user=<user>&password=<pass>
+       username: <your-username>
+       password: <your-password>
+   ```
+
+### Execution Commands
+Run the following Maven commands in the project root directory:
+
+- **Run Dev Profile (Local DB/Default Settings)**:
   ```bash
   .\mvnw.cmd spring-boot:run -Dspring-boot.run.profiles=dev -P!build-frontend
   ```
-- **Staging Profile**: Uses Supabase PgBouncer pooler and optimized Hikari settings.
+- **Run Staging Profile (Supabase Pooler & Optimized Pool)**:
   ```bash
   .\mvnw.cmd spring-boot:run -Dspring-boot.run.profiles=staging -P!build-frontend
   ```
+- **Execute Backend Unit Tests**:
+  ```bash
+  .\mvnw.cmd test -P!build-frontend
+  ```
+
 
 
