@@ -1,0 +1,16 @@
+spring:
+  datasource:
+    url: jdbc:postgresql://aws-1-ap-southeast-2.pooler.supabase.com:6543/postgres?user=postgres.pgrardklsorfdnkmewhi&password=Supabase@12345
+    username: postgres.pgrardklsorfdnkmewhi
+    password: Supabase@12345
+    hikari:
+      maximum-pool-size: 20
+      minimum-idle: 5
+      idle-timeout: 60000
+      max-lifetime: 300000 # 5 minutes (300 seconds) - must be shorter than Supabase idle timeout
+      keepalive-time: 30000 # 30 seconds - keeps the database connections warm and active
+      connection-timeout: 30000
+
+#app:
+#  cors:
+#    allowed-origins: https://staging.myhrconstruction.com
