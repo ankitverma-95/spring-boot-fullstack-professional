@@ -26,5 +26,38 @@ Have you got what it takes to become a professional software engineer? Cool I'll
 
 ![Screenshot 2021-03-11 at 22 56 19](https://user-images.githubusercontent.com/40702606/111074929-5003d780-84dd-11eb-8284-e7c92c7e2905.png)
 
+
 <img width="773" alt="Screenshot 2021-03-12 at 20 48 48" src="https://user-images.githubusercontent.com/40702606/111074947-627e1100-84dd-11eb-9d3f-85fdbf23e290.png">
+
+---
+
+# Construction HRMS Backend
+
+## Supabase Connection Setup (LF-205)
+
+When running the application in a Staging or Production environment connected to Supabase, you must use the **connection pooler** URL instead of the direct database connection.
+
+### Connection Parameters
+- **Direct Connection Port**: `5432` (Avoid in high concurrency environments. Supabase has a low direct connection limit on free tier, which results in `SQLTransientConnectionException: Connection is not available` or socket drops).
+- **Connection Pooler Port**: `6543` (Uses **PgBouncer** in transaction mode. Highly recommended for Spring Boot and HikariCP).
+- **Datasource URL Format**: `jdbc:postgresql://<project-ref>.pooler.supabase.com:6543/postgres?user=<user>&password=<pass>`
+
+### HikariCP Connection Pool Configurations
+To prevent Supabase from silently dropping idle connections and to avoid connection pool exhaustion under moderate traffic, the following pooling rules are implemented in `application-staging.yml`:
+
+- `spring.datasource.hikari.maximum-pool-size=20`: Right-sized to handle up to 20+ concurrent users without latency freezes.
+- `spring.datasource.hikari.max-lifetime=300000`: Sets connection max lifetime to 5 minutes (300 seconds), which is shorter than Supabase's firewall idle timeout, ensuring dead connections are retired and replaced automatically.
+- `spring.datasource.hikari.keepalive-time=30000`: Configures Hikari to send a keepalive query every 30 seconds to keep connections warm and active.
+- `spring.datasource.hikari.connection-timeout=30000`: Allows up to 30 seconds to acquire a connection before throwing a timeout exception.
+
+## Run Configuration
+- **Local Dev Profile**: Starts with default Hikari connection pool configuration.
+  ```bash
+  .\mvnw.cmd spring-boot:run -Dspring-boot.run.profiles=dev -P!build-frontend
+  ```
+- **Staging Profile**: Uses Supabase PgBouncer pooler and optimized Hikari settings.
+  ```bash
+  .\mvnw.cmd spring-boot:run -Dspring-boot.run.profiles=staging -P!build-frontend
+  ```
+
 
