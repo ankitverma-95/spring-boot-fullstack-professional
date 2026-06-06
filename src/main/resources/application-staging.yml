@@ -1,6 +1,6 @@
 spring:
   datasource:
-    url: jdbc:postgresql://aws-1-ap-southeast-2.pooler.supabase.com:6543/postgres?user=postgres.pgrardklsorfdnkmewhi&password=Supabase@12345
+    url: jdbc:postgresql://aws-1-ap-southeast-2.pooler.supabase.com:6543/postgres?user=postgres.pgrardklsorfdnkmewhi&password=Supabase@12345&prepareThreshold=0
     username: postgres.pgrardklsorfdnkmewhi
     password: Supabase@12345
     hikari:

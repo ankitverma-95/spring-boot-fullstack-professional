@@ -40,6 +40,7 @@ public class WorkerService {
         Worker worker = getWorkerById(id);
         
         worker.setName(details.getName());
+        worker.setPhone(details.getPhone());
         worker.setDesignation(details.getDesignation());
         worker.setDailyWageRate(details.getDailyWageRate());
         worker.setActive(details.getActive());
